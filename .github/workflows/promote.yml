@@ -1,0 +1,43 @@
+# Promotes the current staging APK to production.
+# Downloads the APK from the staging release and triggers droidrun CI to test it.
+# Run manually from the GitHub Actions UI or:
+#   gh workflow run promote.yml
+#
+# Prerequisites:
+#   - A staging release must exist (created by staging-build.yml)
+#   - DROIDRUN_TOKEN secret must be set (PAT with repo scope on the droidrun repo)
+
+name: Promote to Production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Trigger droidrun CI
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.DROIDRUN_TOKEN }}
+          script: |
+            const apkUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/download/staging/app-debug.apk`;
+
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: 'droidrun',
+              event_type: 'droidgauntlet-promote',
+              client_payload: {
+                apk_url: apkUrl,
+                sha: context.sha,
+                source_repo: `${context.repo.owner}/${context.repo.repo}`
+              }
+            });
+
+            core.summary.addHeading('Promotion triggered');
+            core.summary.addRaw(`APK: \`${apkUrl}\``);
+            core.summary.addRaw(`\nSHA: \`${context.sha}\``);
+            await core.summary.write();
